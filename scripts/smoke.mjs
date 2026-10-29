@@ -200,8 +200,9 @@ try {
   checks.push('project-created-through-ui');
 
   await page.getByTestId('models-open').click();
-  assert.equal(await page.getByTestId('model-api-endpoint').inputValue(), seededSonnet.baseUrl);
-  assert.equal(await page.getByTestId('model-identifier').inputValue(), seededSonnet.model);
+  // The dialog opens on the first profile; the one-time Flash default is listed first.
+  assert.equal(await page.getByTestId('model-api-endpoint').inputValue(), fresh.models[0].baseUrl);
+  assert.equal(await page.getByTestId('model-identifier').inputValue(), fresh.models[0].model);
   await page.getByTestId('model-preset-openrouter-claude-opus-55').click();
   assert.equal(await page.getByTestId('model-display-name').inputValue(), 'Claude Opus 5.5');
   assert.equal(await page.getByTestId('model-api-protocol').inputValue(), 'openai-compatible');

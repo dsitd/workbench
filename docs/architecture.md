@@ -48,12 +48,12 @@ Renderer не выполняет shell-команды и не обращаетс
 | Интерфейс | [App.tsx](../src/renderer/App.tsx), [Chat.tsx](../src/renderer/components/Chat.tsx), [ContextView.tsx](../src/renderer/components/ContextView.tsx) | Чаты, модели, редактор, ход работы, расходы и состав контекста. |
 | Граница процессов | [preload.ts](../src/main/preload.ts), [bridge.ts](../src/main/bridge.ts), [types.ts](../src/shared/types.ts) | Типизированный `WorkbenchAPI`, IPC-команды и события `AgentEvent`. |
 | Координация | [run-coordinator.ts](../src/main/run-coordinator.ts), [approvals.ts](../src/main/approvals.ts) | Проверки проекта, название чата, остановка и ожидание разрешений. |
-| Агент | [index.ts](../src/agent/index.ts), [runtime.ts](../src/agent/runtime.ts) | Один активный запуск на чат, модельные шаги, инструменты, контроль завершения. |
+| Агент | [index.ts](../src/agent/index.ts), [runtime.ts](../src/agent/runtime.ts), [limits.ts](../src/agent/limits.ts) | Один активный запуск на чат; цикл по фазам: подготовка шага, запрос модели, исполнение вызовов, гейты завершения. Границы харнесса собраны в одном модуле. |
 | Контекст | [context.ts](../src/agent/context.ts), [context-selection.ts](../src/agent/context-selection.ts) | Отбор правил, skills, истории, памяти, файлов и схем в пределах окна модели. |
 | Провайдеры | [providers.ts](../src/agent/providers.ts), [mappings.ts](../src/agent/mappings.ts), [http.ts](../src/agent/http.ts) | Протоколы моделей, streaming, аргументы tool calls, отмена, usage и ограниченные повторы. |
 | Сервисы проекта | [backend/index.ts](../src/backend/index.ts), [tool-registry.ts](../src/backend/tool-registry.ts) | Файлы, поиск, процессы, web, skills, история, снимки и обработчики инструментов. |
 | Внешние инструменты | [mcp/index.ts](../src/backend/mcp/index.ts), [main/mcp.ts](../src/main/mcp.ts) | Каталоги MCP, соединения, разрешения, авторизация и вызовы. |
-| Состояние | [storage.ts](../src/backend/storage.ts), [runs.ts](../src/backend/runs.ts), [operations.ts](../src/backend/operations.ts) | Сохранение проекта и переписки, журнал запусков и исходов действий. |
+| Состояние | [storage.ts](../src/backend/storage.ts), [message-log.ts](../src/backend/message-log.ts), [runs.ts](../src/backend/runs.ts), [operations.ts](../src/backend/operations.ts) | Метаданные проектов и чатов, append-only история каждого чата, тела снимков файлов, журнал запусков и исходов действий. |
 
 `AgentDependencies` в [shared/agent.ts](../src/shared/agent.ts) — контракт runtime с окружением. Через него приходят история, настройки, credentials, инструментальный host, проверки, доступ к вложениям и сохранение результатов. `ToolDefinition` описывает схему и класс разрешений; `ToolCall` — конкретный вызов; `ToolResult` — наблюдаемый результат.
 

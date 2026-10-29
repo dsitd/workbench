@@ -52,6 +52,9 @@ try {
   const fixture = await page.evaluate(async roots => {
     const settings = await window.workbench.getSettings(); await window.workbench.saveSettings({ ...settings, autoTitle: { ...settings.autoTitle, enabled: false } });
     const base = { kind: 'openai-compatible', baseUrl: 'https://openrouter.ai/api/v1', apiKeyEnv: '', contextWindow: 64000, maxOutputTokens: 2048, vision: false, enabled: true, inputPricePerMillion: 100, outputPricePerMillion: 100 };
+    // Chat defaults are exercised with fixture profiles only; the one-time Flash default is switched off like a user would.
+    const flash = (await window.workbench.bootstrap()).models.find(model => model.id === 'openrouter-deepseek-flash');
+    if (flash) await window.workbench.saveModel({ ...flash, enabled: false });
     const alpha = await window.workbench.saveModel({ ...base, id: 'fixture-alpha', name: 'Fixture Alpha', model: 'fixture-alpha' }, 'artificial-chat-management-fixture');
     const beta = await window.workbench.saveModel({ ...base, id: 'fixture-beta', name: 'Fixture Beta', model: 'fixture-beta' }, 'artificial-chat-management-fixture');
     const first = await window.workbench.createProject({ name: 'Первый проект', folders: [{ path: roots[0], access: 'write' }], internet: false });

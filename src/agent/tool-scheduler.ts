@@ -1,9 +1,10 @@
 import type { ToolCall, ToolDefinition } from '../shared/types';
+import { PARALLEL_READS } from './limits';
 
 const independentReads = new Set(['read_file', 'list_files', 'search_files', 'read_skill_resource']);
 /** Only native reads can overlap. Everything else is a barrier; results commit in declaration order. */
 export async function scheduleTools(calls: ToolCall[], definitions: ToolDefinition[], parallel: boolean,
-  execute: (call: ToolCall) => Promise<() => Promise<void>>, concurrency = 4): Promise<void> {
+  execute: (call: ToolCall) => Promise<() => Promise<void>>, concurrency = PARALLEL_READS): Promise<void> {
   const safe = (call: ToolCall) => parallel && independentReads.has(call.name)
     && definitions.some(tool => tool.name === call.name && tool.permission === 'read' && tool.source?.kind !== 'mcp');
   for (let index = 0; index < calls.length;) {

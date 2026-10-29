@@ -24,7 +24,7 @@ test('a new chat inherits the last selected model, mode and reasoning for its ow
   const second = await service.create('first', 'no-key');
   assert.deepEqual([second.modelId, second.mode, second.reasoningEffort], ['connected', 'bypass', 'high']);
   assert.equal(second.title, 'Новый чат'); assert.equal(second.titleSource, 'default');
-  assert.notEqual(second.id, first.id); assert.deepEqual((await store.read()).messages[second.id], []);
+  assert.notEqual(second.id, first.id); assert.deepEqual(await store.messages(second.id), []);
   await service.update(second.id, { modelId: 'no-key', mode: 'plan', reasoningEffort: 'low' });
   await service.update(first.id, { rememberSelection: true });
   const third = await service.create('first', 'no-key');
@@ -48,15 +48,15 @@ test('archiving and restoring preserve message history, run billing, manual name
   const chat = await service.create('first', 'connected');
   await service.update(chat.id, { title: 'Своя история', pinned: true });
   const run: RunRecord = { id: 'fixture-run', projectId: 'first', sessionId: chat.id, modelId: 'connected', status: 'completed', phase: 'final', startedAt: '', steps: 1, stepLog: [], usage: { inputTokens: 100, outputTokens: 10, costUsd: .042, costSource: 'api', tokenSource: 'reported', cacheReadTokens: 80 }, limits: {} };
-  await store.mutate(state => { state.messages[chat.id] = [{ id: 'user', role: 'user', content: 'Preserved', createdAt: '' }]; state.runs = [run]; });
-  const before = await store.read();
+  await store.mutate(state => { state.runs = [run]; }); await store.appendMessage(chat.id, () => ({ id: 'user', role: 'user', content: 'Preserved', createdAt: '' }));
+  const before = await store.read(), messages = await store.messages(chat.id);
   await service.update(chat.id, { archivedAt: '2026-10-07T15:00:00.000Z' });
   const reloadedStore = new StateStore(root), reloaded = new SessionService(reloadedStore);
   const archived = await reloaded.get(chat.id);
   assert.ok(archived.archivedAt); assert.equal(archived.title, 'Своя история'); assert.equal(archived.titleSource, 'manual'); assert.equal(archived.pinned, true);
   const restored = await reloaded.update(chat.id, { archivedAt: null });
   assert.equal(restored.archivedAt, undefined); assert.ok(!Object.hasOwn(restored, 'archivedAt'));
-  assert.deepEqual((await reloadedStore.read()).messages, before.messages);
+  assert.deepEqual(await reloadedStore.messages(chat.id), messages); assert.equal(messages[0].content, 'Preserved');
   assert.deepEqual((await reloadedStore.read()).runs, before.runs);
 });
 

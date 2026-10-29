@@ -34,7 +34,7 @@ export class RunCoordinator {
     if (!run) return;
     await this.refreshFiles(run);
     const project = await this.workspace.getProject(session.projectId);
-    if (!signal.aborted && run.engine !== 'pi' && run.status === 'completed' && agentMode(session.mode) !== 'plan' && project.verificationCommand && project.verifyAfterRun !== false && !freshVerification(run, project))
+    if (!signal.aborted && run.status === 'completed' && agentMode(session.mode) !== 'plan' && project.verificationCommand && project.verifyAfterRun !== false && !freshVerification(run, project))
       await this.verify(sessionId, run.id, signal);
     if (!signal.aborted) await this.name(sessionId, signal);
   }

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { isUtf8 } from 'node:buffer';
 import { assertNonSensitive, isSensitivePath, isWithin, permittedPath } from './access';
-import { StateStore } from './storage';
+import { StateStore, type ChangeRecord } from './storage';
 import { beginSnapshot, restoreBackgroundTaint } from './snapshot-scopes';
 import { searchExcerpts } from './search-excerpts';
 import { applyTextEdits, type TextEdit } from './batch-edit';
@@ -63,7 +63,7 @@ export const MAX_PROJECT_CHECKPOINTS = 1000;
 /** Per-project soft cap. Evicts the oldest checkpoints that no stored change references and that are not the latest of their
  *  session (a running task keeps writing into it). Undo of surviving changes is untouched; if every old checkpoint still owns
  *  changes the cap is exceeded rather than failing writes. */
-export function evictCheckpoints(checkpoints: TaskCheckpoint[], changes: FileChange[], projectId: string, limit = MAX_PROJECT_CHECKPOINTS): TaskCheckpoint[] {
+export function evictCheckpoints(checkpoints: TaskCheckpoint[], changes: readonly (FileChange | ChangeRecord)[], projectId: string, limit = MAX_PROJECT_CHECKPOINTS): TaskCheckpoint[] {
   const own = checkpoints.filter(point => point.projectId === projectId);
   let excess = own.length - limit;
   if (excess <= 0) return checkpoints;
@@ -170,7 +170,7 @@ export class FileService {
     const checkpointId = await this.changeCheckpoint(project, sessionId, options.checkpointId);
     const change = { id: randomUUID(), projectId: project.id, path: file, before, after: content, createdAt: new Date().toISOString(), sessionId, checkpointId, beforeVersion: original.version, afterVersion: fileVersion(content) } satisfies FileChange & { checkpointId?: string; beforeVersion: string | null; afterVersion: string | null };
     await atomicTextWrite(file, content, original.version);
-    try { await this.store.mutate(state => { state.changes.push(change); }); }
+    try { await this.store.addChanges([change]); }
     catch (error) {
       const latest = await currentText(file);
       if (latest.version === change.afterVersion) {
@@ -196,8 +196,10 @@ export class FileService {
     });
   }
 
+  /** Newest first. A change whose stored body is unreadable is omitted here; undoing it reports the error. */
   async changes(projectId: string, sessionId?: string): Promise<FileChange[]> {
-    return (await this.store.read()).changes.filter(value => value.projectId === projectId && (!sessionId || value.sessionId === sessionId)).reverse();
+    const records = await this.store.view(state => state.changes.filter(value => value.projectId === projectId && (!sessionId || value.sessionId === sessionId)));
+    return (await this.store.changeBodies(records, true)).reverse();
   }
 
   async createCheckpoint(project: Project, sessionId: string, title = 'Изменения задачи', runId?: string): Promise<TaskCheckpoint> {
@@ -231,17 +233,17 @@ export class FileService {
 
   async revert(project: Project, changeId: string): Promise<void> {
     return this.exclusive(project, async () => {
-      const change = (await this.store.read()).changes.find(value => value.id === changeId && value.projectId === project.id);
+      const change = await this.store.view(state => state.changes.find(value => value.id === changeId && value.projectId === project.id));
       if (!change) throw new Error('Change not found in this project.');
-      await this.revertLocked(project, [change]);
+      await this.revertLocked(project, await this.store.changeBodies([change]));
     });
   }
   async revertCheckpoint(project: Project, checkpointId: string): Promise<void> {
     return this.exclusive(project, async () => {
       const checkpoint = (await this.checkpoints(project.id)).find(point => point.id === checkpointId);
       if (!checkpoint) throw new Error('Checkpoint not found in this project.');
-      const changes = (await this.store.read()).changes.filter(change => change.projectId === project.id && (change as FileChange & { checkpointId?: string }).checkpointId === checkpointId);
-      await this.revertLocked(project, changes);
+      const records = await this.store.view(state => state.changes.filter(change => change.projectId === project.id && change.checkpointId === checkpointId));
+      await this.revertLocked(project, await this.store.changeBodies(records));
     });
   }
   private async revertLocked(project: Project, changes: FileChange[]): Promise<void> {
@@ -264,8 +266,7 @@ export class FileService {
         } else await atomicTextWrite(file, change.before, version);
         applied.push(file);
       }
-      const ids = new Set(changes.map(change => change.id));
-      await this.store.mutate(state => { state.changes = state.changes.filter(change => !ids.has(change.id)); });
+      await this.store.removeChanges(changes.map(change => change.id));
     } catch (error) {
       // External writers are not covered by our mutex. Roll back only our own
       // untouched results, never replace a newer external edit during recovery.
@@ -373,7 +374,7 @@ export class FileService {
         }
         if (changes.length) {
           const grouped = changes.map(change => ({ ...change, checkpointId, beforeVersion: change.before === null ? null : fileVersion(change.before), afterVersion: change.after === null ? null : fileVersion(change.after) }));
-          await this.store.mutate(state => { state.changes.push(...grouped); }); this.changed(project.id);
+          await this.store.addChanges(grouped); this.changed(project.id);
         }
         const coverage = `Recorded ${changes.length} text file changes. Snapshots cover permitted writable text files up to 2 MiB each, 32 MiB total and 4000 scanned entries; dependency/build/credential paths are excluded.${skipped ? ` ${skipped} file reads were skipped (binary, oversized, inaccessible or total budget).` : ''}${before.truncated || after.truncated ? ' Directory scan limit was reached; coverage is incomplete and new files may be untracked.' : ''} Снимки показывают изменения за время команды; перед откатом проверьте diff, параллельные внешние правки могут попасть в снимок.`;
         if (failure) throw new Error(`${failure.message}\n${coverage}`);

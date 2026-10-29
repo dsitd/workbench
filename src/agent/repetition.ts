@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { ToolCall, ToolResult } from '../shared/types';
+import { REPEAT_LIMIT } from './limits';
 
 const stable = (value: unknown): unknown => Array.isArray(value) ? value.map(stable)
   : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, stable(item)])) : value;
@@ -11,7 +12,7 @@ export class RepetitionGuard {
   private observations = new Map<string, { output: string; count: number }>();
   private denied = 0;
   blocked(call: ToolCall): boolean {
-    const repeated = (this.observations.get(this.key(call))?.count ?? 0) >= 3;
+    const repeated = (this.observations.get(this.key(call))?.count ?? 0) >= REPEAT_LIMIT;
     if (repeated) this.denied++;
     else this.denied = 0;
     return repeated;

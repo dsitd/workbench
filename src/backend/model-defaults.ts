@@ -4,7 +4,7 @@ import { agentMode } from '../shared/modes';
 import type { WorkspaceState } from './storage';
 
 /** One-time selection change; subsequent user choices and deletions remain authoritative. */
-export function initializeFlashDefault(state: WorkspaceState, hasCredential?: (id: string) => boolean): void {
+export function initializeFlashDefault(state: WorkspaceState, hasMessages: (sessionId: string) => boolean, hasCredential?: (id: string) => boolean): void {
   if (state.flashDefaultInitialized) return;
   let flash = state.models.find(model => model.id === flashPreset.id);
   if (!flash) {
@@ -30,7 +30,7 @@ export function initializeFlashDefault(state: WorkspaceState, hasCredential?: (i
       ...project.chatDefaults, mode: agentMode(project.chatDefaults?.mode), modelId: flash.id, reasoningEffort: flash.reasoningEffort ?? 'high',
     };
     for (const session of state.sessions) {
-      if ((state.messages[session.id]?.length ?? 0) || session.archivedAt || ['running', 'approval'].includes(session.status)) continue;
+      if (hasMessages(session.id) || session.archivedAt || ['running', 'approval'].includes(session.status)) continue;
       session.modelId = flash.id;
       session.reasoningEffort = flash.reasoningEffort ?? 'high';
     }

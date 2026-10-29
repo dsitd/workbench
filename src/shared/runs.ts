@@ -1,8 +1,5 @@
 import type { ContextSelectionState, ContextUsageBaseline } from './context';
-import type { ChatMessage } from './types';
-export type RuntimeEngine = 'pi' | 'legacy';
 import type { BehaviorCheck } from './behavior-check';
-import type { CounterexampleReview, SearchProgress } from './search-verification';
 import type { OperationRecord, TaskCriterion, TaskNote, ToolObservation } from './task-evidence';
 export type ReasoningEffort = 'auto' | 'low' | 'medium' | 'high';
 /** maxSteps=0 explicitly disables only the step ceiling; other budgets still apply. */
@@ -20,7 +17,7 @@ export interface RunUsage extends CacheUsage {
   unknownCostCalls?: number;
 }
 export interface RunStep extends CacheUsage {
-  kind?: 'agent' | 'explore' | 'compaction' | 'counterexample' | 'action-review';
+  kind?: 'agent' | 'explore' | 'compaction' | 'action-review';
   actionReview?: { toolCallId: string; allowed: boolean; reason: string };
   assistantMessageId?: string;
   index: number; startedAt: string; durationMs: number; toolNames: string[];
@@ -55,8 +52,8 @@ export interface VerificationResult {
   exitCode?: number; startedAt: string; finishedAt?: string; durationMs?: number;
 }
 export interface RunRecord {
-  engine?: RuntimeEngine;
-  pendingMessages?: { kind: 'steering' | 'follow-up'; message: ChatMessage }[];
+  /** Set only by the removed experimental engine; such runs are kept for history and never continued. */
+  engine?: 'pi' | 'legacy';
   id: string; projectId: string; sessionId: string; modelId: string; modelIdentifier?: string;
   kind?: 'agent' | 'title'; mode?: string; reasoningEffort?: ReasoningEffort;
   status: 'running' | 'completed' | 'stopped' | 'error' | 'limited' | 'incomplete' | 'interrupted';
@@ -74,8 +71,6 @@ export interface RunRecord {
   presentedImageMessageIds?: string[]; loadedMcpToolNames?: string[];
   acceptanceCriteria?: TaskCriterion[]; taskNotes?: TaskNote[]; toolObservations?: ToolObservation[];
   behaviorCheck?: BehaviorCheck;
-  counterexampleReview?: CounterexampleReview;
-  searchProgress?: SearchProgress;
   evidenceScope?: string;
   completionAttempts?: number;
   hookContinuation?: string;
@@ -88,15 +83,12 @@ export interface RunRecord {
 export interface TitleSettings { enabled: boolean; credentialModelId?: string; model: string }
 export interface PromptCacheSettings { enabled: boolean; ttl: '5m' | '1h' }
 export interface AppSettings {
-  runtimeEngine?: RuntimeEngine;
   autoTitle: TitleSettings; runLimits: RunLimits; contextBudgetTokens?: number;
   /** Legacy economy targets are ignored unless the user explicitly selects a custom limit. */
   contextPolicy?: 'model-window' | 'custom';
   promptCache?: PromptCacheSettings; adaptiveContext?: boolean;
   /** Opt-in experiment; current evals do not demonstrate better solve rate for its added cost. */
   behaviorVerification?: boolean;
-  /** Opt-in prototype: isolated counterexample proposals and bounded stagnation detection. */
-  searchVerification?: boolean;
   toolExecution?: 'parallel' | 'sequential';
   completionPolicy?: 'verified' | 'natural';
   modelCompaction?: boolean;
@@ -104,10 +96,9 @@ export interface AppSettings {
 
 export const defaultRunLimits: Required<RunLimits> = { maxSteps: 80, maxTokens: 1_000_000, maxCostUsd: 2, maxDurationMs: 30 * 60_000 };
 export const defaultAppSettings: AppSettings = {
-  runtimeEngine: 'legacy',
   autoTitle: { enabled: true, model: 'google/gemini-2.5-flash-lite' }, runLimits: defaultRunLimits,
   contextPolicy: 'model-window', contextBudgetTokens: 32_000, adaptiveContext: false, promptCache: { enabled: true, ttl: '5m' },
-  behaviorVerification: false, searchVerification: false, toolExecution: 'parallel', completionPolicy: 'verified', modelCompaction: true,
+  behaviorVerification: false, toolExecution: 'parallel', completionPolicy: 'verified', modelCompaction: true,
 };
 export function isReasoningEffort(value: unknown): value is ReasoningEffort { return ['auto', 'low', 'medium', 'high'].includes(value as string); }
 export function checkedRunLimits(value: RunLimits = {}): RunLimits {
@@ -124,4 +115,7 @@ export function checkedRunLimits(value: RunLimits = {}): RunLimits {
 /** Model-authored memory is a fallible observation, never instructions or acceptance evidence. */
 export interface ModelHistorySummary {
   version: 1; scope: string; text: string; sources: { id: string; hash: string }[]; createdAt: string;
+  /** false: summarization stopped early and covers only `sources`; later omitted messages were not summarized.
+   * Missing on older version-1 records, which were stored only after the whole chain succeeded. */
+  complete?: boolean;
 }

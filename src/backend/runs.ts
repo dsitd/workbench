@@ -1,6 +1,6 @@
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { RunRecord } from '../shared/types';
 import { validId } from './storage';
 
@@ -13,6 +13,8 @@ export class RunStore {
   // id -> owner keys; loaded once inside the queue, then updated by save/remove so filtered lists read only matching files.
   private keys?: Map<string, RunKey>;
   private loading?: Promise<Map<string, RunKey>>;
+  // id -> digest of the last record this store wrote; an identical save is skipped.
+  private written = new Map<string, string>();
   constructor(dataDir: string) { this.directory = path.join(dataDir, 'runs'); }
   private file(id: string) { return path.join(this.directory, `${validId(id)}.json`); }
   private enqueue<T>(operation: () => Promise<T>): Promise<T> { const pending = this.queue.then(operation); this.queue = pending.catch(() => undefined); return pending; }
@@ -35,13 +37,16 @@ export class RunStore {
   }
   async get(id: string): Promise<RunRecord | undefined> { await this.queue; return this.read(id); }
   async save(record: RunRecord): Promise<void> {
-    const snapshot = structuredClone(record);
+    const text = JSON.stringify(record), digest = createHash('sha256').update(text).digest('base64');
+    const { id, projectId, sessionId, startedAt } = record, file = this.file(id);
     await this.enqueue(async () => {
+      if (this.written.get(id) === digest) return;
       await mkdir(this.directory, { recursive: true, mode: 0o700 });
       const temporary = path.join(this.directory, `.run-${randomUUID()}.tmp`);
-      await writeFile(temporary, JSON.stringify(snapshot), { flag: 'wx', mode: 0o600 });
-      await rename(temporary, this.file(snapshot.id));
-      this.keys?.set(snapshot.id, { projectId: snapshot.projectId, sessionId: snapshot.sessionId, startedAt: snapshot.startedAt });
+      try { await writeFile(temporary, text, { flag: 'wx', mode: 0o600 }); await rename(temporary, file); }
+      catch (error) { this.written.delete(id); await unlink(temporary).catch(() => undefined); throw error; }
+      this.written.set(id, digest);
+      this.keys?.set(id, { projectId, sessionId, startedAt });
     });
   }
   async list(projectId?: string, sessionId?: string): Promise<RunRecord[]> {
@@ -60,7 +65,7 @@ export class RunStore {
       let removed = 0;
       for (const [id, key] of [...this.keys!]) if (key.projectId === projectId) {
         await unlink(this.file(id)).catch(error => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; });
-        this.keys!.delete(id); removed++;
+        this.keys!.delete(id); this.written.delete(id); removed++;
       }
       return removed;
     });

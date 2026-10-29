@@ -53,7 +53,7 @@ export async function createBridge(dataDir: string, getWindow: () => BrowserWind
     recoverToolResult: (call, context) => workspace.operations.recoveredResult(call, context),
     recoverOperation: (call, context) => workspace.operations.recoveredOperation(call, context),
     operationStates: (ids, context) => workspace.operations.states(ids, context),
-  }, { engine: 'legacy' });
+  });
 
   const bootstrap = async (): Promise<Bootstrap> => {
     const base = await workspace.bootstrap(id => vault.has(id));
@@ -130,10 +130,6 @@ export async function createBridge(dataDir: string, getWindow: () => BrowserWind
         }).finally(() => { coordinator.end(sessionId); active.delete(sessionId); work.delete(sessionId); });
         work.set(sessionId, running);
       } catch (error) { active.delete(sessionId); throw error; }
-    },
-    queueMessage: async (sessionId, text, attachmentIds, kind) => {
-      if (shuttingDown || sessionUpdates.has(sessionId)) throw new Error('Чат сейчас недоступен для нового сообщения.');
-      await runtime.enqueue(sessionId, text, attachmentIds, kind);
     },
     stopRun: async id => { coordinator.stop(id); broker.cancelSession(id); await runtime.stop(id); await workspace.commands.stopSession(id); },
     importImages: async paths => {

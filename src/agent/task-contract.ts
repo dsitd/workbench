@@ -4,7 +4,6 @@ import { AgentError } from './errors';
 import { recordTaskMemory, taskMemoryTool } from './task-memory';
 import { nonEvidenceTools as claims } from '../shared/evidence-policy';
 import { behaviorCheckState } from './behavior-verification';
-import { counterexampleState } from './counterexamples';
 
 const text = { type: 'string', minLength: 3, maxLength: 1000 };
 const id = { type: 'string', minLength: 1, maxLength: 100, pattern: '^[A-Za-z0-9_-]+$' };
@@ -97,9 +96,8 @@ export function completionResult(run: RunRecord): ToolResult {
   const missing = (run.acceptanceCriteria ?? []).filter(item => !item.toolName || !item.expectedText || claims.has(item.toolName) || !item.evidence || item.evidence.revision !== revision || item.evidence.scope !== run.evidenceScope).map(item => ({ id: item.id, text: item.text, ...(!item.toolName || !item.expectedText ? { needsBinding: 'Use set_task_criteria with toolName and expectedText before attaching evidence.' } : {}) }));
   const uncertain = (run.operations ?? []).filter(item => ['running', 'uncertain'].includes(item.status)).map(item => ({ operationId: item.id, toolName: item.toolName }));
   const behavior = behaviorCheckState(run), behaviorMissing = behavior && behavior.status !== 'passed';
-  const counterexample = counterexampleState(run), counterexampleMissing = counterexample && counterexample.status !== 'passed';
-  return { text: JSON.stringify({ status: missing.length || uncertain.length || behaviorMissing || counterexampleMissing ? 'unverified' : 'passed', missingCriteria: missing, uncertainOperations: uncertain, behaviorCheck: behavior, counterexampleReview: counterexample, availableObservations: availableEvidence(run),
-    instruction: 'Reuse matching availableObservations in record_task_evidence; criterionIds can attach one observation to several checks. Only obtain new evidence when missing or stale. For an unresolved behaviorCheck, repair then rerun its exact command/cwd with behaviorCheck phase regression and the same description, after other mutations. For counterexampleReview, run its exact probe.command/cwd after other mutations, or request a second review with a concrete reason if the test is wrong. Use operationId (not toolCallId) for uncertain effects. Do not remove criteria, invent evidence or repeat uncertain effects. A passed contract proves only its checks.' }), error: Boolean(missing.length || uncertain.length || behaviorMissing || counterexampleMissing) };
+  return { text: JSON.stringify({ status: missing.length || uncertain.length || behaviorMissing ? 'unverified' : 'passed', missingCriteria: missing, uncertainOperations: uncertain, behaviorCheck: behavior, availableObservations: availableEvidence(run),
+    instruction: 'Reuse matching availableObservations in record_task_evidence; criterionIds can attach one observation to several checks. Only obtain new evidence when missing or stale. For an unresolved behaviorCheck, repair then rerun its exact command/cwd with behaviorCheck phase regression and the same description, after other mutations. Use operationId (not toolCallId) for uncertain effects. Do not remove criteria, invent evidence or repeat uncertain effects. A passed contract proves only its checks.' }), error: Boolean(missing.length || uncertain.length || behaviorMissing) };
 }
 
 export function availableEvidence(run: Pick<RunRecord, 'toolObservations' | 'mutationRevision' | 'evidenceScope'>) {

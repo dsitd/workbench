@@ -3,7 +3,7 @@ import type { AgentEvent, WorkbenchAPI } from '../shared/types';
 
 const methods = [
   'bootstrap', 'chooseFolders', 'createProject', 'saveProject', 'deleteProject',
-  'listSessions', 'createSession', 'updateSession', 'getMessages', 'sendMessage', 'queueMessage', 'stopRun',
+  'listSessions', 'createSession', 'updateSession', 'getMessages', 'sendMessage', 'stopRun',
   'importImages', 'pasteImages', 'resolveAttachment', 'listFiles', 'readFile', 'writeFile', 'getChanges',
   'revertChange', 'getRules', 'saveRule', 'listSkills', 'createSkill', 'saveSkill', 'installSkill', 'setSkillEnabled',
   'removeSkill', 'readSkill', 'exportSkill', 'saveModel', 'testModel', 'deleteModel', 'respondApproval', 'getContext',

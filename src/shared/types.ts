@@ -127,7 +127,6 @@ export interface WorkbenchAPI {
   updateSession(sessionId: string, patch: SessionPatch): Promise<Session>;
   getMessages(sessionId: string): Promise<ChatMessage[]>;
   sendMessage(sessionId: string, text: string, attachmentIds: string[]): Promise<void>;
-  queueMessage(sessionId: string, text: string, attachmentIds: string[], kind: 'steering' | 'follow-up'): Promise<void>;
   stopRun(sessionId: string): Promise<void>;
   importImages(paths?: string[]): Promise<Attachment[]>;
   pasteImages(): Promise<Attachment[]>;

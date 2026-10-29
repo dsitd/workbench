@@ -7,6 +7,7 @@ import { aggregateUsage, estimate, requestCost, responseUsage, RunJournal, RunLi
 import { ModelBudgetError, ModelGenerationFailure } from './provider-failure';
 import { generate } from './providers';
 import { observedActionDiff } from './action-diff';
+import { CONTEXT_RESERVE_TOKENS } from './limits';
 
 export const actionReviewInstruction = `ACTION_REVIEW_V1
 For this request, review a proposed external action; do not act as the customer-service agent and do not call tools.
@@ -37,7 +38,7 @@ export async function reviewAction(options: Options): Promise<ToolResult | undef
     observedFieldComparisons: observedActionDiff(call, [...options.messages, ...options.completedInStep]),
   }) }];
   const inputEstimate = estimate(system) + estimate(JSON.stringify(messages)) + 256;
-  if (inputEstimate + model.maxOutputTokens + 1024 > model.contextWindow)
+  if (inputEstimate + model.maxOutputTokens + CONTEXT_RESERVE_TOKENS > model.contextWindow)
     return { error: true, text: 'Action review: action not executed because the relevant evidence exceeds the review context. Obtain narrower authoritative records and retry.' };
   checkAbort(signal);
   const reached = journal.limit(); if (reached) throw new RunLimitError(reached, journal.run.limits);

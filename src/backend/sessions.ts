@@ -35,7 +35,7 @@ export class SessionService {
       const now = new Date().toISOString();
       const session: Session = { id: randomUUID(), projectId, modelId: model.id, title: defaultChatTitle, status: 'idle', summary: '', mode, reasoningEffort, titleSource: 'default', createdAt: now, updatedAt: now };
       project.chatDefaults = { modelId: model.id, mode, reasoningEffort };
-      state.sessions.push(session); state.messages[session.id] = [];
+      state.sessions.push(session);
       return session;
     });
   }

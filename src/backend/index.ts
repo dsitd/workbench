@@ -78,7 +78,7 @@ export class WorkspaceServices {
   }
 
   async bootstrap(hasCredential?: (id: string) => boolean): Promise<Bootstrap> {
-    this.initialization ??= this.store.mutate(state => {
+    this.initialization ??= this.store.mutate(async state => {
       state.settings = appSettings(state.settings);
       for (const session of state.sessions) migrateChatTitle(session);
       const preset = modelPresets[0];
@@ -98,7 +98,8 @@ export class WorkspaceServices {
         state.modelPresetsRevision = 2;
         state.modelPresetsInitialized = true;
       }
-      initializeFlashDefault(state, hasCredential);
+      const used = state.flashDefaultInitialized ? new Set<string>() : await this.store.messageSessions();
+      initializeFlashDefault(state, id => used.has(id), hasCredential);
       // Recover once on application startup; later UI refreshes must not stop live runs.
       for (const session of state.sessions) if (['running', 'approval'].includes(session.status)) session.status = 'stopped';
     }).then(async () => { await this.runs.recover(); await this.operations.recover(); });
@@ -134,15 +135,17 @@ export class WorkspaceServices {
     await this.getProject(id);
     const installed = (await this.store.read()).skills.filter(skill => skill.projectId === id);
     for (const skill of installed) await this.skills.remove(skill.id);
-    await this.store.mutate(state => {
-      for (const session of state.sessions.filter(value => value.projectId === id)) delete state.messages[session.id];
+    const removed = await this.store.mutate(state => {
+      const owned = { sessions: state.sessions.filter(value => value.projectId === id).map(value => value.id), changes: state.changes.filter(value => value.projectId === id).map(value => value.id) };
       state.projects = state.projects.filter(value => value.id !== id);
       state.sessions = state.sessions.filter(value => value.projectId !== id);
       state.changes = state.changes.filter(value => value.projectId !== id);
       if (state.checkpoints) state.checkpoints = state.checkpoints.filter(value => value.projectId !== id);
       for (const server of state.mcpServers ?? []) server.projectIds = server.projectIds.filter(projectId => projectId !== id);
+      return owned;
     });
     // Private per-project records outlive workspace.json otherwise. Attachments are global (no project owner) and stay.
+    await this.store.discardMessages(removed.sessions); await this.store.discardChanges(removed.changes);
     await this.operations.removeProject(id); await this.runs.removeProject(id);
     this.callbacks.emit({ type: 'refresh' });
   }
@@ -151,17 +154,15 @@ export class WorkspaceServices {
   async getSession(id: string): Promise<Session> { return this.sessions.get(id); }
   async createSession(projectId: string, modelId?: string): Promise<Session> { return this.sessions.create(projectId, modelId); }
   async updateSession(id: string, patch: Parameters<SessionService['update']>[1]): Promise<Session> { return this.sessions.update(id, patch); }
-  async getMessages(id: string): Promise<ChatMessage[]> { await this.getSession(id); return (await this.store.read()).messages[id] ?? []; }
+  async getMessages(id: string): Promise<ChatMessage[]> { await this.store.view(state => { requireItem(state.sessions, validId(id), 'Session'); }); return this.store.messages(id); }
   async appendMessage(sessionId: string, message: ChatMessage): Promise<void> {
     if (!message || !['user', 'assistant', 'tool', 'system'].includes(message.role) || typeof message.content !== 'string' || message.content.length > 5_000_000) throw new Error('Invalid conversation message.');
-    await this.store.mutate(state => {
-      const session = requireItem(state.sessions, validId(sessionId), 'Session');
+    await this.store.appendMessage(validId(sessionId), state => {
+      const session = requireItem(state.sessions, sessionId, 'Session');
       if (message.attachmentIds) for (const id of message.attachmentIds) requireItem(state.attachments, validId(id), 'Attachment');
-      const messages = state.messages[sessionId] ??= [];
-      if (messages.some(value => value.id === message.id)) throw new Error('Message already exists.');
       const project = requireItem(state.projects, session.projectId, 'Project');
-      messages.push({ ...message, accessScope: accessScope(project) });
       session.updatedAt = new Date().toISOString();
+      return { ...message, accessScope: accessScope(project) };
     });
   }
 

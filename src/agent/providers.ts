@@ -7,6 +7,7 @@ import { anthropicBody, chatBody, responsesBody } from './mappings';
 import { demoResponse } from './demo';
 import { CredentialRedactor } from './redaction';
 import { checkedReasoning, isOpenRouter, ReasoningAccumulator } from './reasoning';
+import { MAX_TOOL_CALLS_PER_STEP } from './limits';
 
 interface PartialCall { id: string; name: string; arguments: string | Json }
 export type ProviderResponse = ModelResponse & { providerItems?: Json[] };
@@ -185,7 +186,7 @@ export async function generate(request: ModelRequest, fetcher?: Fetcher): Promis
       }
       return { id: call.id, name: call.name, arguments: args };
     });
-    if (toolCalls.length > 16) throw new AgentError('Модель запросила больше 16 инструментов за шаг. Разделите задачу на меньшие действия.');
+    if (toolCalls.length > MAX_TOOL_CALLS_PER_STEP) throw new AgentError(`Модель запросила больше ${MAX_TOOL_CALLS_PER_STEP} инструментов за шаг. Разделите задачу на меньшие действия.`);
     if (new Set(toolCalls.map(call => call.id)).size !== toolCalls.length) throw new AgentError('Модель вернула повторяющиеся идентификаторы инструментов.');
     const invalidBatch = toolCalls.some(call => call.argumentError);
     if (invalidBatch) for (const call of toolCalls) call.argumentError ??= 'Another call in this batch has invalid JSON arguments. This action was not executed. Regenerate the intended batch; earlier successful actions must not be repeated.';
