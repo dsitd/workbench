@@ -1,0 +1,23 @@
+.composer-select-wrap { display: inline-flex; min-width: 0; max-width: 100%; }
+.composer-select-trigger { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; min-height: 28px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); color: var(--text-secondary); font-size: 11px; font-weight: 500; line-height: 1.5; text-align: left; }
+.composer-select-trigger:hover:not(:disabled), .composer-select-trigger[aria-expanded="true"] { background: #eeebe3; border-color: #d9d2c5; color: #514c43; }
+.composer-select-trigger:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.composer-select-trigger:disabled { opacity: .55; }
+.composer-select-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.composer-select-icon, .composer-select-chevron { display: inline-flex; align-items: center; flex-shrink: 0; color: #8b8477; }
+.composer-select-icon svg { display: block; }
+.composer-select-chevron { margin-left: auto; color: #a19888; transition: transform .12s; }
+.composer-select-trigger[aria-expanded="true"] .composer-select-chevron { transform: rotate(180deg); }
+.composer-select-wrap.mode-bypass .composer-select-icon { color: var(--accent); }
+.composer-select-wrap.model-choice { max-width: 270px; }
+.composer-select-menu { position: fixed; z-index: 1200; width: 300px; max-width: calc(100vw - 20px); max-height: 360px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 5px; border: 1px solid #ddd6c9; border-radius: 10px; background: var(--surface); color: #514c43; box-shadow: 0 4px 8px #4a3b2208, 0 12px 32px #4a3b221a; font-size: 11px; -webkit-app-region: no-drag; }
+.composer-select-option { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 8px 9px; border-radius: 6px; cursor: pointer; user-select: none; }
+.composer-select-option.is-active:not(.is-disabled) { background: #f0ece2; }
+.composer-select-option.is-selected { color: #39352f; }
+.composer-select-option.is-disabled { color: #aaa297; cursor: default; }
+.composer-select-option-copy { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 3px; }
+.composer-select-option-label { font-weight: 500; line-height: 1.45; overflow-wrap: anywhere; }
+.composer-select-option-description { font-size: 11px; line-height: 1.5; font-weight: 400; color: #908779; overflow-wrap: anywhere; }
+.composer-select-option.is-disabled .composer-select-option-description { color: #b4ada2; }
+.composer-select-check { width: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .composer-select-chevron { transition: none; } }

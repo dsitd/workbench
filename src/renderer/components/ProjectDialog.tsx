@@ -1,0 +1,65 @@
+import { useEffect, useState } from 'react';
+import { FileText, FolderPlus, Globe2, Save, ShieldCheck, Trash2 } from 'lucide-react';
+import type { FileConflict, Project, ProjectFolder, RuleDocument, RunLimits } from '../../shared/types';
+import { api, basename, errorText } from '../api';
+import { Busy, ErrorNote, IconButton, Modal } from './Common';
+import { ConflictReview } from './ConflictReview';
+import { RunLimitsFields } from './RunLimitsFields';
+
+export function ProjectDialog({ project, sandboxAvailable, defaultLimits, onClose, onSaved, onDeleted }: { project?: Project; sandboxAvailable: boolean; defaultLimits?: RunLimits; onClose: () => void; onSaved: (project: Project) => void; onDeleted: () => void }) {
+  const [tab, setTab] = useState<'project' | 'rules'>('project');
+  const [name, setName] = useState(project?.name || '');
+  const [folders, setFolders] = useState<ProjectFolder[]>(project?.folders || []);
+  const [internet, setInternet] = useState(project?.internet ?? true);
+  const [policy, setPolicy] = useState<'ask' | 'sandbox'>(project?.commandPolicy || 'ask');
+  const [instructions, setInstructions] = useState(project?.instructions || '');
+  const [verificationCommand, setVerificationCommand] = useState(project?.verificationCommand || '');
+  const [verifyAfterRun, setVerifyAfterRun] = useState(project?.verifyAfterRun ?? Boolean(project?.verificationCommand));
+  const [memory, setMemory] = useState(project?.memory || '');
+  const [runLimits, setRunLimits] = useState<RunLimits>(project?.runLimits || {});
+  const [ruleConflict, setRuleConflict] = useState<FileConflict>();
+  const [rules, setRules] = useState<RuleDocument[]>([]);
+  const [selectedRule, setSelectedRule] = useState(0);
+  const [ruleContent, setRuleContent] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const [notice, setNotice] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  useEffect(() => {
+    if (!project || tab !== 'rules') return;
+    let active = true; setBusy(true);
+    api.getRules(project.id).then((documents) => {
+      if (!active) return;
+      const writableFile = documents.findIndex((document) => basename(document.path) === 'AGENTS.md' && document.writable);
+      const actualFile = documents.findIndex((document) => basename(document.path) === 'AGENTS.md');
+      const initial = writableFile >= 0 ? writableFile : actualFile >= 0 ? actualFile : 0;
+      setRules(documents); setSelectedRule(initial); setRuleContent(documents[initial]?.content || ''); setRuleConflict(undefined); setNotice('');
+    }).catch((cause) => { if (active) setError(errorText(cause)); }).finally(() => { if (active) setBusy(false); });
+    return () => { active = false; };
+  }, [project?.id, tab]);
+  const addFolders = async () => { setError(undefined); try { const paths = await api.chooseFolders(); setFolders((current) => [...current, ...paths.filter((path) => !current.some((folder) => folder.path === path)).map((path) => ({ path, access: 'write' as const }))]); if (!name && paths[0]) setName(basename(paths[0])); } catch (cause) { setError(errorText(cause)); } };
+  const save = async () => { setBusy(true); setError(undefined); try { const value = { name: name.trim(), folders, internet, commandPolicy: policy, instructions, verificationCommand: verificationCommand.trim(), verifyAfterRun, memory, runLimits }; const saved = project ? await api.saveProject({ ...project, ...value }) : await api.createProject(value); onSaved(saved); } catch (cause) { setError(errorText(cause)); } finally { setBusy(false); } };
+  const saveRule = async () => {
+    const document = rules[selectedRule]; if (!project || !document || ruleConflict) return;
+    const draft = ruleContent; setBusy(true); setError(undefined);
+    try {
+      const result = await api.saveRule(project.id, document.path, draft, document.version ?? null);
+      if ('ok' in result && result.ok === false) { setRuleConflict(result.conflict); return; }
+      if (!('content' in result)) return;
+      setRules((current) => current.map((rule) => rule.path === document.path ? result : rule));
+      if (result.path.startsWith('project:')) { setInstructions(result.content); setNotice('Инструкции проекта сохранены'); }
+      else setNotice('Правила сохранены в AGENTS.md');
+    } catch (cause) { setError(errorText(cause)); } finally { setBusy(false); }
+  };
+  const rereadRule = async () => { if (!project || !rules[selectedRule]) return; setBusy(true); setError(undefined); try { const documents = await api.getRules(project.id); const latest = documents.find((document) => document.path === rules[selectedRule].path); if (!latest) throw new Error('Документ правил больше недоступен.'); setRuleConflict({ path: latest.path, expectedVersion: rules[selectedRule].version ?? null, currentVersion: latest.version ?? null, currentContent: latest.content }); } catch (cause) { setError(errorText(cause)); } finally { setBusy(false); } };
+  const reviewedRule = () => { if (!ruleConflict) return; setRules((current) => current.map((document) => document.path === ruleConflict.path ? { ...document, version: ruleConflict.currentVersion ?? undefined, content: ruleConflict.currentContent ?? '' } : document)); setRuleConflict(undefined); };
+  const remove = async () => { if (!project) return; setBusy(true); try { await api.deleteProject(project.id); onDeleted(); } catch (cause) { setError(errorText(cause)); setBusy(false); } };
+  return <Modal title={project ? 'Настройки проекта' : 'Новый проект'} subtitle={project ? project.name : 'Дайте агенту доступ к нужным папкам'} onClose={onClose} wide><div className="dialog-tabs"><button className={tab === 'project' ? 'active' : ''} onClick={() => { setTab('project'); setError(undefined); }}>Проект и доступ</button>{project && <button data-testid="rules-open" className={tab === 'rules' ? 'active' : ''} onClick={() => { setTab('rules'); setError(undefined); }}>Правила AGENTS.md</button>}</div><div className="modal-content" aria-busy={busy}><ErrorNote text={error} />
+    {tab === 'project' ? <><label className="field"><span>Название проекта</span><input data-testid="project-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Например, личный сайт" /></label><div className="field"><div className="field-title"><span>Доступные папки</span><button className="text-button" onClick={() => void addFolders()}><FolderPlus size={14} />Добавить папки</button></div><div className="folder-access-list">{folders.length === 0 ? <button className="folder-empty" onClick={() => void addFolders()}><FolderPlus size={22} /><span>Выбрать папки на Mac</span><small>Можно добавить несколько папок</small></button> : folders.map((folder) => <div className="folder-access-row" key={folder.path}><div><strong>{basename(folder.path)}</strong><span title={folder.path}>{folder.path}</span></div><select aria-label={`Права для ${folder.path}`} value={folder.access} onChange={(event) => setFolders((current) => current.map((item) => item.path === folder.path ? { ...item, access: event.target.value as ProjectFolder['access'] } : item))}><option value="write">Чтение и запись</option><option value="read">Только чтение</option></select><IconButton label="Убрать папку" onClick={() => setFolders((current) => current.filter((item) => item.path !== folder.path))}><Trash2 size={15} /></IconButton></div>)}</div></div>
+    <div className="settings-row"><div><Globe2 size={19} /><div><strong>Доступ в интернет</strong><p>Поиск и чтение публичных веб-страниц агентом</p></div></div><label className="switch"><input type="checkbox" aria-label="Доступ в интернет" checked={internet} onChange={(event) => setInternet(event.target.checked)} /><span /></label></div><div className="settings-row"><div><ShieldCheck size={19} /><div><strong>Выполнение команд</strong><p>{sandboxAvailable ? 'Запрашивать разрешение или запускать в sandbox' : 'Выполнение команд недоступно в этой среде.'}</p></div></div><select aria-label="Политика выполнения команд" disabled={!sandboxAvailable} value={policy} onChange={(event) => setPolicy(event.target.value as 'ask' | 'sandbox')}><option value="ask">Спрашивать</option><option value="sandbox" disabled={!sandboxAvailable}>Sandbox</option></select></div>
+    <section className="settings-section"><div className="settings-section-heading"><h3>Проверка результата</h3></div><label className="field"><span>Команда проверки проекта</span><input className="config-input" data-testid="project-verification-command" value={verificationCommand} onChange={(event) => setVerificationCommand(event.target.value)} placeholder="npm run check" spellCheck={false} /><small>Выполняется в папке проекта с действующими правами и политикой команд.</small></label><label className="checkbox-row"><input data-testid="project-verify-after-run" type="checkbox" checked={verifyAfterRun} onChange={(event) => setVerifyAfterRun(event.target.checked)} disabled={!verificationCommand.trim()} /><span>Проверять перед завершением задачи</span></label></section>
+    <section className="settings-section"><div className="settings-section-heading"><h3>Бюджет проекта</h3></div><RunLimitsFields value={runLimits} inherited={defaultLimits} onChange={setRunLimits} /></section>
+    <label className="field"><span>Память проекта</span><textarea data-testid="project-memory-settings" value={memory} onChange={(event) => setMemory(event.target.value)} rows={4} placeholder="Устойчивые решения и важные сведения, полезные следующим задачам…" /><small>Можно также редактировать в панели контекста. Добавляется к контексту проекта.</small></label>
+    <label className="field"><span>Инструкции проекта</span><textarea className="instructions-input" value={instructions} onChange={(event) => setInstructions(event.target.value)} placeholder="Стек, стиль кода, команды проверки, что учитывать в каждой задаче…" rows={6} /><small>Добавляются к контексту каждой задачи вместе с AGENTS.md.</small></label></> : <div className="rules-editor">{busy && rules.length === 0 ? <Busy /> : <><label className="field"><span>Документ правил</span><select value={rules[selectedRule]?.path || ''} disabled={busy} onChange={(event) => { const index = rules.findIndex((rule) => rule.path === event.target.value); setSelectedRule(index); setRuleContent(rules[index]?.content || ''); setRuleConflict(undefined); setNotice(''); }}>{rules.map((rule) => <option key={rule.path} value={rule.path}>{rule.path.startsWith('project:') ? 'Инструкции проекта · в настройках Workbench' : `${rule.scope} · ${rule.path}`}</option>)}</select></label>{rules[selectedRule] ? <><div className="rule-path"><FileText size={14} /><span>{rules[selectedRule].path.startsWith('project:') ? 'Инструкции проекта (настройки Workbench)' : rules[selectedRule].path}</span><span>{rules[selectedRule].writable ? 'Доступна запись' : 'Только чтение'}</span></div>{ruleConflict ? <ConflictReview currentContent={ruleConflict.currentContent ?? ''} draft={ruleContent} busy={busy} onReload={() => void rereadRule()} onDraft={setRuleContent} onReviewed={reviewedRule} /> : <textarea className="code-editor rule-textarea" value={ruleContent} onChange={(event) => { setRuleContent(event.target.value); setNotice(''); }} readOnly={!rules[selectedRule].writable} spellCheck={false} aria-label={rules[selectedRule].path.startsWith('project:') ? 'Инструкции проекта' : 'Содержимое AGENTS.md'} />}<div className="field-help">{rules[selectedRule].path.startsWith('project:') ? 'Инструкции сохраняются в настройках проекта и добавляются к контексту каждой задачи.' : 'Правила сохраняются в выбранный файл AGENTS.md. Агент читает подходящие правила при сборке контекста.'}</div>{notice && <div className="success-note" role="status">{notice}</div>}</> : <p className="empty-note">В этом проекте нет доступных документов правил.</p>}</>}</div>}
+  </div><footer className="modal-footer"><div>{tab === 'project' && project && !confirmDelete && <button className="danger-text" onClick={() => setConfirmDelete(true)}><Trash2 size={14} />Удалить проект</button>}{confirmDelete && <div className="delete-confirm"><span>Удалить проект и его чаты? Файлы останутся на диске.</span><button className="danger-button" disabled={busy} onClick={() => void remove()}>Удалить</button><button className="text-button" onClick={() => setConfirmDelete(false)}>Отмена</button></div>}</div><div className="footer-actions"><button className="secondary-button" onClick={onClose}>Закрыть</button>{tab === 'project' ? <button data-testid="project-save" className="primary-button" disabled={busy || !name.trim() || folders.length === 0} onClick={() => void save()}>{busy ? <Busy text="Сохраняем…" /> : 'Сохранить проект'}</button> : <button className="primary-button" disabled={busy || Boolean(ruleConflict) || !rules[selectedRule]?.writable || ruleContent === rules[selectedRule]?.content} onClick={() => void saveRule()}><Save size={14} />Сохранить правила</button>}</div></footer></Modal>;
+}

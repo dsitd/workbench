@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#fffdf7"/>
+      <stop offset="1" stop-color="#f0ebe1"/>
+    </linearGradient>
+    <linearGradient id="copper" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#d38b6c"/>
+      <stop offset="1" stop-color="#b36349"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="15" stdDeviation="18" flood-color="#574530" flood-opacity=".16"/>
+    </filter>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="204" fill="url(#paper)" filter="url(#shadow)"/>
+  <rect x="65.5" y="65.5" width="893" height="893" rx="202.5" fill="none" stroke="#fffdf8" stroke-width="3"/>
+  <path d="M 512 258 C 547 448 576 477 766 512 C 576 547 547 576 512 766 C 477 576 448 547 258 512 C 448 477 477 448 512 258 Z" fill="url(#copper)"/>
+  <path d="M 741 213 C 753 264 760 271 811 283 C 760 295 753 302 741 353 C 729 302 722 295 671 283 C 722 271 729 264 741 213 Z" fill="#bd7155" opacity=".8"/>
+</svg>

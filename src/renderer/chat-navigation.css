@@ -1,0 +1,24 @@
+.project-group .project-row > .icon-button { opacity: 1; width: 24px; height: 25px; }
+.session-entry { display: flex; align-items: center; min-width: 0; border-radius: 6px; }
+.session-entry:hover { background: #e8e4da; }
+.session-entry.active { background: #faf9f5; box-shadow: 0 1px 3px #342b1805; }
+.session-entry > .session-row { flex: 1; min-width: 0; width: auto; }
+.session-entry > .session-row.active { box-shadow: none; }
+.session-entry .chat-menu-trigger { width: 24px; height: 26px; margin-right: 2px; opacity: .5; }
+.session-entry:hover .chat-menu-trigger, .session-entry:focus-within .chat-menu-trigger, .session-entry.active .chat-menu-trigger { opacity: 1; }
+.chat-action-menu { position: fixed; z-index: 10000; width: 195px; padding: 5px; border: 1px solid #d9d2c7; border-radius: 9px; background: #faf9f5; box-shadow: 0 7px 24px #392e1a1c; }
+.chat-action-menu > button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 10px; border-radius: 5px; font-size: 12px; text-align: left; color: var(--text-secondary); }
+.chat-action-menu > button:hover, .chat-action-menu > button:focus-visible { background: #eee8df; color: #302e2a; outline: none; }
+.chat-action-menu > button:disabled { opacity: .45; }
+.archive-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 10px 8px 5px; color: var(--text-secondary); font-size: 11px; }
+.archive-toggle span { flex: 1; text-align: left; }
+.archive-toggle small { font: inherit; opacity: .7; }
+.archived-chats { opacity: .8; padding-top: 3px; }
+.archived-chat-banner { margin: 0 29px 12px; padding: 10px 12px; display: flex; align-items: center; gap: 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); color: var(--text-secondary); font-size: 11px; }
+.archived-chat-banner span { flex: 1; }
+.archived-chat-banner button { white-space: nowrap; }
+.context-cache-card { border: 1px solid var(--line); background: var(--soft); border-radius: 8px; padding: 12px; margin: 14px 0; }
+.context-cache-card h3 { margin: 0 0 9px; font-size: 12px; }
+.context-cache-card > div { display: flex; justify-content: space-between; gap: 14px; font-size: 11px; padding: 4px 0; color: var(--text-secondary); }
+.context-cache-card strong { font-weight: 550; color: #302e2a; font-variant-numeric: tabular-nums; }
+.context-cache-card .field-help { margin: 8px 0 0; }
