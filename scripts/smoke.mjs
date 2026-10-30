@@ -186,7 +186,7 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: folders });
   }, [projectRoot, readOnlyRoot]);
   await page.getByTestId('project-create').first().click();
-  await page.getByRole('button', { name: 'Выбрать папки на Mac' }).click();
+  await page.getByRole('button', { name: 'Выбрать папки' }).click();
   await page.getByTestId('project-name').fill('Проверка системы');
   await page.getByLabel(`Права для ${readOnlyRoot}`).selectOption('read');
   await page.screenshot({ path: path.join(runDir, 'project.png') });

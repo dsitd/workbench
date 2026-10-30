@@ -1,5 +1,5 @@
 /** One reproducible command suite per run; the description is a model claim. */
-export const standardCommandDescription = 'Run a command inside the macOS sandbox. Writes are limited to writable project roots and disposable scratch; credentials are blocked. Requires approval if command policy is ask. Fails closed when sandbox is unavailable.';
+export const standardCommandDescription = 'Run a command inside the operating-system sandbox. Writes are limited to writable project roots and disposable scratch; credentials are blocked. Requires approval if command policy is ask. Fails closed when sandbox is unavailable.';
 export interface BehaviorCheckRequest {
   phase: 'baseline' | 'regression';
   description: string;

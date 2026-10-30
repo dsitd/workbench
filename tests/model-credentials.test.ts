@@ -54,7 +54,7 @@ test('saving and reopening persists references without duplicating credentials; 
 
 test('vault uses the selected source while preserving an independent key for removal of the reference', async t => {
   const root = await temporary(t); let decryptions = 0;
-  const storage = { isEncryptionAvailable: () => true, encryptString: (value: string) => Buffer.from(value), decryptString: (value: Buffer) => { decryptions++; return value.toString(); } };
+  const storage = { isEncryptionAvailable: () => true, getSelectedStorageBackend: () => 'gnome_libsecret' as const, encryptString: (value: string) => Buffer.from(value), decryptString: (value: Buffer) => { decryptions++; return value.toString(); } };
   const vault = new CredentialVault(root, storage); await vault.initialize();
   assert.equal(vault.hasModel(target, [source, target]), false);
   await vault.save(source.id, 'artificial-source-placeholder');
@@ -72,7 +72,7 @@ test('vault uses the selected source while preserving an independent key for rem
 
 test('vault refuses edited foreign sources and targets before decrypting even an independently stored key', async t => {
   const root = await temporary(t); let decryptions = 0;
-  const vault = new CredentialVault(root, { isEncryptionAvailable: () => true, encryptString: (value: string) => Buffer.from(value), decryptString: (value: Buffer) => { decryptions++; return value.toString(); } });
+  const vault = new CredentialVault(root, { isEncryptionAvailable: () => true, getSelectedStorageBackend: () => 'gnome_libsecret' as const, encryptString: (value: string) => Buffer.from(value), decryptString: (value: Buffer) => { decryptions++; return value.toString(); } });
   await vault.initialize(); await vault.save(source.id, 'artificial-source-placeholder'); await vault.save(target.id, 'artificial-independent-placeholder');
   const foreignSource = { ...source, baseUrl: 'https://fixture.invalid/v1' };
   assert.equal(vault.hasModel(target, [foreignSource, target]), false);
@@ -80,4 +80,21 @@ test('vault refuses edited foreign sources and targets before decrypting even an
   await assert.rejects(vault.resolve({ ...target, baseUrl: 'https://fixture.invalid/v1' }, [source, target]), /официального API/);
   await assert.rejects(vault.resolve(target, []), /не найден/);
   assert.equal(decryptions, 0);
+});
+
+test('Linux vault refuses basic_text and unknown backends without touching encrypted records', async t => {
+  const root = await temporary(t);
+  for (const backend of ['basic_text', 'unknown']) {
+    let encrypted = false;
+    const vault = new CredentialVault(root, {
+      isEncryptionAvailable: () => true,
+      getSelectedStorageBackend: () => backend as 'basic_text' | 'unknown',
+      encryptString: () => { encrypted = true; return Buffer.alloc(0); },
+      decryptString: () => { throw new Error('Unsafe backend must never decrypt'); },
+    }, 'linux');
+    await vault.initialize();
+    await assert.rejects(vault.save(source.id, 'artificial-placeholder'), /GNOME Keyring/);
+    assert.equal(encrypted, false);
+    assert.equal(vault.has(source.id), false);
+  }
 });

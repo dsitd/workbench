@@ -5,12 +5,20 @@ import type { McpServerConfig, ModelConfig } from '../shared/types';
 import { mcpCredentialId } from './mcp-credentials';
 import { modelCredentialSource } from '../shared/model-credentials';
 
+type SecureStorage = Pick<typeof safeStorage, 'isEncryptionAvailable' | 'encryptString' | 'decryptString'>
+  & Partial<Pick<typeof safeStorage, 'getSelectedStorageBackend'>>;
+
 // Only encrypted bytes are persisted; plaintext never crosses back to the renderer.
 export class CredentialVault {
   private records: Record<string, string> = {};
   private updates: Promise<void> = Promise.resolve();
   private readonly file: string;
-  constructor(dataDir: string, private readonly storage: Pick<typeof safeStorage, 'isEncryptionAvailable' | 'encryptString' | 'decryptString'> = safeStorage) { this.file = path.join(dataDir, 'credentials.encrypted.json'); }
+  constructor(dataDir: string, private readonly storage: SecureStorage = safeStorage, private readonly platform: NodeJS.Platform = process.platform) { this.file = path.join(dataDir, 'credentials.encrypted.json'); }
+  private encryptionAvailable(): boolean {
+    if (!this.storage.isEncryptionAvailable()) return false;
+    if (this.platform !== 'linux') return true;
+    return ['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6'].includes(this.storage.getSelectedStorageBackend?.() ?? 'unknown');
+  }
   async initialize() {
     try { this.records = JSON.parse(await fs.readFile(this.file, 'utf8')); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('Не удалось открыть защищённое хранилище ключей.'); }
@@ -21,7 +29,7 @@ export class CredentialVault {
     catch { return false; }
   }
   async save(id: string, value: string) {
-    if (!this.storage.isEncryptionAvailable()) throw new Error('Защищённое хранилище macOS недоступно. Используйте переменную окружения для ключа.');
+    if (!this.encryptionAvailable()) throw new Error('Защищённое хранилище ключей недоступно. На Linux включите GNOME Keyring или KWallet, либо укажите переменную окружения для ключа.');
     const encrypted = this.storage.encryptString(value).toString('base64');
     await this.mutate(records => ({ ...records, [id]: encrypted }));
   }
@@ -50,7 +58,7 @@ export class CredentialVault {
   private async resolveRecord(id: string, environmentName: string): Promise<string | undefined> {
     await this.updates;
     const encrypted = this.records[id];
-    if (encrypted && this.storage.isEncryptionAvailable()) return this.storage.decryptString(Buffer.from(encrypted, 'base64'));
+    if (encrypted && this.encryptionAvailable()) return this.storage.decryptString(Buffer.from(encrypted, 'base64'));
     return environmentName ? process.env[environmentName] : undefined;
   }
   private mutate(operation: (records: Record<string, string>) => Record<string, string>): Promise<void> {

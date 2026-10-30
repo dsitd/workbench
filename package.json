@@ -12,16 +12,24 @@
     "build": "npm run typecheck && vite build && node scripts/build-main.mjs",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts src/renderer/tests/*.test.ts",
+    "test:pilot": "tsx --test tests/pilot/*.test.ts",
     "eval": "tsx scripts/eval.ts",
-    "check": "npm run typecheck && npm test && npm run build",
+    "check": "npm run typecheck && npm test && npm run test:pilot && npm run build",
     "start": "electron .",
-    "package": "npm run build && electron-builder --mac dir --publish never",
-    "dist": "npm run build && electron-builder --mac dmg zip --publish never",
+    "package": "npm run build && electron-builder --dir --publish never",
+    "dist": "npm run build && electron-builder --publish never",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "lifecycle:check": "npm run build && node scripts/lifecycle-smoke.mjs",
     "sandbox:check": "tsx scripts/sandbox-smoke.ts",
     "features:check": "npm run build && node scripts/features-smoke.mjs",
-    "chats:check": "npm run build && node scripts/chat-management-smoke.mjs"
+    "chats:check": "npm run build && node scripts/chat-management-smoke.mjs",
+    "package:mac": "npm run build && electron-builder --mac dir --publish never",
+    "package:linux": "npm run build && electron-builder --linux dir --publish never",
+    "dist:mac": "npm run build && electron-builder --mac dmg zip --publish never",
+    "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never",
+    "bench": "tsx scripts/harness-pilot/run.ts",
+    "bench:memory": "tsx scripts/harness-pilot/memory-run.ts",
+    "bench:check": "tsx scripts/harness-pilot/portable-check.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.3.1",
@@ -74,6 +82,35 @@
     },
     "asarUnpack": [
       "node_modules/@vscode/ripgrep*/**"
-    ]
-  }
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development",
+      "icon": "assets/icon.png",
+      "executableName": "workbench"
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "bubblewrap (>= 0.8.0)",
+        "libasound2t64 | libasound2",
+        "libgbm1",
+        "libdrm2",
+        "libx11-xcb1"
+      ],
+      "maintainer": "Workbench local build <noreply@example.invalid>"
+    }
+  },
+  "homepage": "https://github.com/dsitd/workbench"
 }

@@ -1,0 +1,35 @@
+name: macOS and Linux
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap xvfb dbus-x11 libgtk-3-0 libnss3 libasound2t64 libsecret-1-0
+      - run: npm ci
+      - run: npm run check
+      # These fail (never skip) if host policy does not permit real isolation.
+      - run: npm run sandbox:check
+      - run: npm run bench:check
+      - name: Desktop acceptance (Linux)
+        if: runner.os == 'Linux'
+        run: dbus-run-session -- xvfb-run -a npm run smoke
+      - name: Desktop acceptance (macOS)
+        if: runner.os == 'macOS'
+        run: npm run smoke
+      - run: npm run package

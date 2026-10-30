@@ -1,3 +1,4 @@
+import { shortcutModifier } from '../platform';
 import { useState } from 'react';
 import { Archive, ArrowUpRight, BookOpen, ChevronDown, ChevronRight, FolderOpen, MessageSquare, MoreHorizontal, Pin, Plug, Plus, Settings2, Sparkles } from 'lucide-react';
 import type { Project, Session } from '../../shared/types';
@@ -18,7 +19,7 @@ export function Sidebar({ projects, sessions, projectId, sessionId, onProject, o
   const rename = async () => { if (!renaming || busy || !title.trim()) return; setBusy(true); setError(undefined); try { await onRename(renaming.id, title.trim()); setRenaming(undefined); } catch (cause) { setError(errorText(cause)); } finally { setBusy(false); } };
   const row = (chat: Session) => <div className={`session-entry ${chat.id === sessionId ? 'active' : ''}`} key={chat.id} data-testid={`chat-row-${chat.id}`}><button className={`session-row ${chat.id === sessionId ? 'active' : ''}`} onClick={() => onSession(chat.id)} title={chat.title}>{chat.pinned ? <Pin size={12} /> : <MessageSquare size={13} />}<span>{chat.title}</span>{(chat.status === 'running' || chat.status === 'approval') && <i className={`session-dot ${chat.status}`} />}</button><ChatMenu chat={chat} onRename={() => { setRenaming(chat); setTitle(chat.title); setError(undefined); }} onPin={() => onPin(chat)} onArchive={() => onArchive(chat)} onRestore={() => onRestore(chat)} /></div>;
   return <aside className="sidebar"><div className="sidebar-brand"><div className="brand-symbol"><Sparkles size={21} strokeWidth={1.5} /></div><span>Workbench</span><span className="brand-local">local</span></div>
-    <button className="new-chat-button" disabled={!projectId} onClick={() => projectId && onNewSession(projectId)}><Plus size={17} /><span>Новый чат</span><kbd>⌘ N</kbd></button>
+    <button className="new-chat-button" disabled={!projectId} onClick={() => projectId && onNewSession(projectId)}><Plus size={17} /><span>Новый чат</span><kbd>{shortcutModifier} N</kbd></button>
     <div className="sidebar-section-label"><span>ПРОЕКТЫ</span><IconButton label="Добавить проект" testId="project-create" onClick={onNewProject}><Plus size={15} /></IconButton></div>
     <nav className="project-list" aria-label="Проекты">{projects.length === 0 && <p className="sidebar-empty">Добавьте папку проекта,<br />чтобы начать работу.</p>}{projects.map((project) => {
       const selected = project.id === projectId;

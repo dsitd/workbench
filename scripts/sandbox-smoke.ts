@@ -6,7 +6,7 @@ import { WorkspaceServices } from '../src/backend';
 import type { Project, ToolResult } from '../src/shared/types';
 
 async function main(): Promise<void> {
-// Run from an ordinary macOS terminal: npx tsx scripts/sandbox-smoke.ts
+// Run from an ordinary macOS or Linux terminal: npx tsx scripts/sandbox-smoke.ts
 // A surrounding process sandbox may prohibit sandbox_apply; this check reports
 // that limitation and exits nonzero rather than running unsandboxed commands.
 const fixture = path.resolve('.workbench', 'sandbox-acceptance', randomUUID());
@@ -31,7 +31,7 @@ const record = async (name: string, operation: () => Promise<void>) => {
 try {
   const boot = await services.bootstrap();
   report.sandboxAvailable = boot.sandboxAvailable;
-  if (!boot.sandboxAvailable) { report.result = 'unavailable'; throw new Error('macOS sandbox_apply is unavailable in this process. Run this script from an ordinary macOS terminal.'); }
+  if (!boot.sandboxAvailable) { report.result = 'unavailable'; throw new Error('The OS sandbox is unavailable. Linux requires Bubblewrap with permitted user namespaces; macOS requires an ordinary terminal.'); }
   const project = await services.createProject({ name: 'Sandbox acceptance fixture', folders: [{ path: projectRoot, access: 'write' }, { path: readonlyRoot, access: 'read' }], commandPolicy: 'sandbox', internet: false });
   const session = await services.createSession(project.id, 'demo');
   const run = async (command: string, scopedProject: Project = project, scopedSession = session.id, timeoutMs = 10_000): Promise<ToolResult> =>
@@ -55,9 +55,15 @@ try {
     assert.equal(await readFile(edited, 'utf8'), 'original fixture');
   });
 
-  await record('zsh here-document uses permitted scratch storage', async () => {
+  await record('shell here-document uses permitted scratch storage', async () => {
     const result = await success("/bin/cat <<'WORKBENCH_EOF'\npublic here-document fixture\nWORKBENCH_EOF");
     assert.match(result.text, /public here-document fixture/);
+  });
+
+  await record('shell expands project globs without loading user startup files', async () => {
+    const result = await success("printf '%s\\n' *.txt");
+    assert.ok(result.text.includes('edited.txt'));
+    assert.ok(!result.text.includes('*.txt'));
   });
 
   await record('command create/delete tracking and undo', async () => {

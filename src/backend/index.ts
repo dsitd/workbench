@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { normalizeFolders } from './access';
 import { AttachmentService } from './attachments';
-import { CommandService, sandboxAvailable, type WorkspaceCallbacks } from './commands';
+import { CommandService, sandboxAvailable, type WorkspaceCallbacks, type CommandRuntime } from './commands';
 import { DiagnosticService } from './diagnostics';
 import { FileService, FileConflictError, fileVersion } from './files';
 import { RunStore } from './runs';
@@ -61,12 +61,12 @@ export class WorkspaceServices {
   get tools() { return this.toolRegistry.definitions; }
   private initialization?: Promise<void>;
 
-  constructor(dataDir: string, private callbacks: WorkspaceCallbacks) {
+  constructor(dataDir: string, private callbacks: WorkspaceCallbacks, commandRuntime?: CommandRuntime) {
     this.store = new StateStore(dataDir);
     this.files = new FileService(this.store, projectId => callbacks.emit({ type: 'changes', projectId }));
     this.attachments = new AttachmentService(this.store);
     this.skills = new SkillService(this.store);
-    this.commands = new CommandService(this.store.directory, callbacks, context => this.toolContext(context));
+    this.commands = new CommandService(this.store.directory, callbacks, context => this.toolContext(context), commandRuntime);
     this.diagnostics = new DiagnosticService(this.files, this.commands);
     this.runs = new RunStore(dataDir);
     this.sessions = new SessionService(this.store);

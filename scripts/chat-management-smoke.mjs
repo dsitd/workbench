@@ -103,7 +103,7 @@ try {
   await page.locator('.new-chat-button').click();
   await wait(async () => (await sessionsFor(fixture.first.id)).length === 4);
   const fourthId = (await sessionsFor(fixture.first.id)).find(chat => ![firstChat.id, secondChat.id, thirdId].includes(chat.id)).id; await assertSelected(fourthId, fixture.beta.id, 'plan', 'high');
-  await page.keyboard.press('Meta+n');
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+n' : 'Control+n');
   await wait(async () => (await sessionsFor(fixture.first.id)).length === 5);
   const fifthId = (await sessionsFor(fixture.first.id)).find(chat => ![firstChat.id, secondChat.id, thirdId, fourthId].includes(chat.id)).id; await assertSelected(fifthId, fixture.beta.id, 'plan', 'high');
   const firstChats = await sessionsFor(fixture.first.id);

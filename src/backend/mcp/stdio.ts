@@ -6,7 +6,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { McpServerConfig, Project } from '../../shared/types';
 import { isSensitivePath, isWithin } from '../access';
-import { sandboxAvailable, sandboxProfile } from '../commands';
+import { sandboxAvailable, sandboxProfile, prepareSandbox, commandPath, commandLocale } from '../sandbox';
 import { envName, McpFailure, MESSAGE_LIMIT, type SecretValues } from './safety';
 
 export interface StdioLaunch { command: string; args: string[]; cwd: string; env: Record<string, string>; scratch: string; profile: string }
@@ -69,7 +69,7 @@ export class ProcessTransport implements Transport {
 
 export async function createStdio(storeDirectory: string, server: McpServerConfig, project: Project, secrets: SecretValues, factory?: StdioFactory): Promise<ManagedTransport> {
   // An injected launcher is available only to local fixture tests. The app never supplies one.
-  if (!factory && !(await sandboxAvailable())) throw new McpFailure('The macOS command sandbox is unavailable. MCP stdio servers are disabled.');
+  if (!factory && !(await sandboxAvailable())) throw new McpFailure('The command sandbox is unavailable. MCP stdio servers are disabled.');
   const privateRoot = await realpath(storeDirectory);
   const roots = await Promise.all(project.folders.map(async root => {
     const canonical = await realpath(root.path);
@@ -79,8 +79,8 @@ export async function createStdio(storeDirectory: string, server: McpServerConfi
   if (!roots.length || isWithin(privateRoot, roots[0].path)) throw new McpFailure('MCP requires a project folder outside application storage.');
   const scratch = path.join(privateRoot, 'mcp-scratch', randomUUID());
   const env: Record<string, string> = {
-    PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin', HOME: path.join(scratch, 'home'), TMPDIR: path.join(scratch, 'tmp'),
-    LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8', TERM: 'dumb', CI: '1', npm_config_cache: path.join(scratch, 'home', '.npm'),
+    PATH: commandPath, HOME: path.join(scratch, 'home'), TMPDIR: path.join(scratch, 'tmp'),
+    LANG: commandLocale, LC_ALL: commandLocale, TERM: 'dumb', CI: '1', npm_config_cache: path.join(scratch, 'home', '.npm'),
     PYTHONNOUSERSITE: '1', PYTHONDONTWRITEBYTECODE: '1',
   };
   for (const [name, value] of Object.entries(secrets.env)) {
@@ -98,12 +98,14 @@ export async function createStdio(storeDirectory: string, server: McpServerConfi
   // A canonical executable may live outside ordinary project/system reads. Permit
   // that one binary without opening its parent directory or the user's home.
   const profile = `${sandboxProfile(roots, scratch, project.internet, privateRoot)}\n(allow file-read* (literal ${JSON.stringify(executable)}))`;
+  let sandbox: Awaited<ReturnType<typeof prepareSandbox>> | undefined;
   try {
+    if (!factory) sandbox = await prepareSandbox({ roots, temporary: scratch, internet: project.internet, privateRoot, readFiles: [executable] }, executable, server.args);
     const managed = factory ? await factory({ command: executable, args: server.args, cwd: roots[0].path, env, scratch, profile }) : {
-      transport: new ProcessTransport({ command: '/usr/bin/sandbox-exec', args: ['-p', profile, executable, ...server.args], cwd: roots[0].path, env }),
-      cleanup: async () => undefined,
+      transport: new ProcessTransport({ command: sandbox!.executable, args: sandbox!.args, cwd: roots[0].path, env }),
+      cleanup: async () => { await sandbox?.cleanup(); },
     };
     let cleanup: Promise<void> | undefined;
     return { transport: managed.transport, cleanup: () => cleanup ??= (async () => { await managed.cleanup(); await rm(scratch, { recursive: true, force: true }); })() };
-  } catch (error) { await rm(scratch, { recursive: true, force: true }); throw error; }
+  } catch (error) { await sandbox?.cleanup(); await rm(scratch, { recursive: true, force: true }); throw error; }
 }

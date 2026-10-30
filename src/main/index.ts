@@ -27,7 +27,8 @@ app.on('second-instance', () => {
 function createWindow() {
   window = new BrowserWindow({
     title: 'Workbench', width: 1460, height: 960, minWidth: 1060, minHeight: 700,
-    backgroundColor: '#faf9f5', titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 18 },
+    backgroundColor: '#faf9f5',
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 18, y: 18 } } : {}),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   const development = process.env.WORKBENCH_DEV_URL;

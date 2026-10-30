@@ -6,7 +6,8 @@ import { randomUUID } from 'node:crypto';
 import type { GitDiff, GitFileStatus, GitRootStatus, GitStatus, Project } from '../shared/types';
 import { isSensitivePath, isWithin } from './access';
 import { FileService } from './files';
-import { CommandService, redactCommandOutput, sandboxAvailable, sandboxProfile } from './commands';
+import { prepareSandbox, commandLocale } from './sandbox';
+import { CommandService, redactCommandOutput, sandboxAvailable } from './commands';
 
 interface Repository { root: string; git: string; scratch: string; shadow: string; objects: string; privateRoot: string }
 const MAX_OUTPUT = 120_000;
@@ -26,7 +27,7 @@ export class GitService {
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined; throw error; }
     const privateRoot = await this.files.privateDirectory();
     if (isWithin(privateRoot, git)) throw new Error('Application storage is private.');
-    if (!(await sandboxAvailable())) throw new Error('The macOS Git sandbox is unavailable.');
+    if (!(await sandboxAvailable())) throw new Error('The Git sandbox is unavailable.');
     const scratch = path.join(privateRoot, 'git-scratch', randomUUID());
     const shadow = path.join(scratch, 'repository');
     await mkdir(shadow, { recursive: true, mode: 0o700 });
@@ -62,11 +63,11 @@ export class GitService {
     } catch (error) { await rm(scratch, { recursive: true, force: true }); throw error; }
   }
   private async run(project: Project, repo: Repository, args: string[]): Promise<{ text: string; truncated: boolean }> {
-    const profile = `${sandboxProfile(project.folders.map(folder => ({ path: folder.path, access: 'read' })), repo.scratch, false, repo.privateRoot, [], [repo.objects])}\n(deny file-read* (literal ${JSON.stringify(path.join(repo.objects, 'info', 'alternates'))}))`;
-    return new Promise((resolve, reject) => {
-      const child = spawn('/usr/bin/sandbox-exec', ['-p', profile, '/usr/bin/git', '--no-pager', '--git-dir', repo.shadow, '--work-tree', repo.root, '-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false', '-c', 'core.hooksPath=/dev/null', '-c', 'status.renames=false', '-c', 'diff.external=', ...args], {
+    const sandbox = await prepareSandbox({ roots: project.folders.map(folder => ({ path: folder.path, access: 'read' })), temporary: repo.scratch, internet: false, privateRoot: repo.privateRoot, metadataReadRoots: [repo.objects], deniedFiles: [path.join(repo.objects, 'info', 'alternates')] }, '/usr/bin/git', ['--no-pager', '--git-dir', repo.shadow, '--work-tree', repo.root, '-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false', '-c', 'core.hooksPath=/dev/null', '-c', 'status.renames=false', '-c', 'diff.external=', ...args]);
+    try { return await new Promise<{ text: string; truncated: boolean }>((resolve, reject) => {
+      const child = spawn(sandbox.executable, sandbox.args, {
         cwd: repo.root, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
-        env: { PATH: '/usr/bin:/bin', HOME: repo.scratch, TMPDIR: repo.scratch, LANG: 'en_US.UTF-8', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1', GIT_PAGER: 'cat' },
+        env: { PATH: '/usr/bin:/bin', HOME: repo.scratch, TMPDIR: repo.scratch, LANG: commandLocale, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', GIT_NO_REPLACE_OBJECTS: '1', GIT_PAGER: 'cat' },
       });
       let stdout = ''; let truncated = false;
       const kill = () => { try { if (child.pid) process.kill(-child.pid, 'SIGKILL'); } catch { /* exited */ } };
@@ -75,7 +76,7 @@ export class GitService {
       child.stderr.on('data', () => undefined); // Never expose raw metadata/config errors.
       child.on('error', () => { clearTimeout(timer); kill(); reject(new Error('Git process could not start.')); });
       child.on('close', code => { clearTimeout(timer); kill(); if (code !== 0) reject(new Error('Git read failed or exceeded its time limit. Repository contents were preserved.')); else resolve({ text: stdout, truncated }); });
-    });
+    }); } finally { await sandbox.cleanup(); }
   }
   private async safePaths(project: Project, repo: Repository): Promise<string[]> {
     const listed = await this.run(project, repo, ['ls-files', '-z', '--cached']);
